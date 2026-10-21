@@ -251,21 +251,32 @@ h3 + .row {
 }
 
 .row.customs {
-  grid-template-columns: 180px auto 75px 32px;
+  grid-template-columns: 240px auto 75px 32px;
   justify-content: start;
   margin: 10px 0;
 }
 
-/* Special handling for rows without value inputs */
-.row.customs:has(input[style*='display: none']) {
-  grid-template-columns: 180px auto 0;
+.row.customs.hold-advance {
+  grid-template-columns: 240px auto 75px 75px 32px;
 }
 
-.row.customs:has(input[style*='display: none']) .customValue {
-  width: 0;
-  padding: 0;
-  border: none;
-  margin: 0;
+.shortcut-help {
+  max-width: 600px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.row.customs.no-value {
+  grid-template-columns: 240px auto 32px;
+}
+
+.row.customs [hidden] {
+  display: none;
+}
+
+.shortcut-warning {
+  grid-column: 2 / -1;
 }
 
 /* Remove button styling */
@@ -286,11 +297,6 @@ h3 + .row {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* Hide remove button for predefined shortcuts */
-.row.customs[id] .removeParent {
-  display: none;
 }
 
 select:disabled:hover {
@@ -387,6 +393,11 @@ input[type='number'] {
   min-width: 75px;
 }
 
+input.customKey {
+  /* Recorded mouse labels should fit immediately, without animating width. */
+  transition-property: border-color, background-color, box-shadow;
+}
+
 /* Specific input widths */
 #controllerOpacity,
 #controllerButtonSize {
@@ -445,7 +456,7 @@ select:hover {
 
 /* Specific select widths */
 .customDo {
-  width: 180px;
+  width: 240px;
 }
 
 #logLevel {

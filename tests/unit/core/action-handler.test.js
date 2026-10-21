@@ -58,6 +58,7 @@ describe('ActionHandler', () => {
   }
 
   afterEach(() => {
+    window.VSC.videoSpeedConfig.save = window.VSC.VideoSpeedConfig.prototype.save;
     cleanupChromeMock();
     if (mockDOM) {
       mockDOM.cleanup();
@@ -208,6 +209,12 @@ describe('ActionHandler', () => {
   it('ActionHandler should work with mark/jump key bindings', async () => {
     const config = window.VSC.videoSpeedConfig;
     await config.load();
+    await config.save({
+      keyBindings: [
+        { action: 'mark', code: 'KeyM', key: 77, value: 0 },
+        { action: 'jump', code: 'KeyJ', key: 74, value: 0 },
+      ],
+    });
 
     const actionHandler = new window.VSC.ActionHandler(config, null);
     const eventManager = new window.VSC.EventManager(config, actionHandler);
@@ -1044,9 +1051,15 @@ describe('ActionHandler', () => {
     expect(video.playbackRate).toBe(1.0);
   });
 
-  it('cross-toggle works end-to-end via runAction with default bindings', async () => {
+  it('cross-toggle works end-to-end via runAction with configured bindings', async () => {
     const config = window.VSC.videoSpeedConfig;
     await config.load();
+    await config.save({
+      keyBindings: [
+        { action: 'reset', key: 82, value: 1 },
+        { action: 'fast', key: 71, value: 1.8 },
+      ],
+    });
 
     // Ensure default bindings are in effect
     config.setKeyBinding('reset', 1.0);
@@ -1070,6 +1083,12 @@ describe('ActionHandler', () => {
   it('cross-toggle works end-to-end via runAction for fast action', async () => {
     const config = window.VSC.videoSpeedConfig;
     await config.load();
+    await config.save({
+      keyBindings: [
+        { action: 'reset', key: 82, value: 1 },
+        { action: 'fast', key: 71, value: 1.8 },
+      ],
+    });
 
     const eventManager = new window.VSC.EventManager(config, null);
     const actionHandler = new window.VSC.ActionHandler(config, eventManager);
@@ -1093,6 +1112,12 @@ describe('ActionHandler', () => {
   it('cross-toggle with custom reset and preferred speeds', async () => {
     const config = window.VSC.videoSpeedConfig;
     await config.load();
+    await config.save({
+      keyBindings: [
+        { action: 'reset', key: 82, value: 1.5 },
+        { action: 'fast', key: 71, value: 2 },
+      ],
+    });
 
     // Set custom speeds
     config.setKeyBinding('reset', 1.5);
@@ -1174,6 +1199,7 @@ describe('ActionHandler', () => {
   it('reset action should work with keyboard event simulation', async () => {
     const config = window.VSC.videoSpeedConfig;
     await config.load();
+    await config.save({ keyBindings: [{ action: 'reset', code: 'KeyR', key: 82, value: 1.5 }] });
 
     const actionHandler = new window.VSC.ActionHandler(config, null);
     const eventManager = new window.VSC.EventManager(config, actionHandler);

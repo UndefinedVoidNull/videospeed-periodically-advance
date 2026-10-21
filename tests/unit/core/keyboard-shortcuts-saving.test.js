@@ -7,6 +7,7 @@ import {
   installChromeMock,
   cleanupChromeMock,
   resetMockStorage,
+  getMockStorage,
 } from '../../helpers/chrome-mock.js';
 
 // Load all required modules
@@ -34,22 +35,13 @@ describe('KeyboardShortcutsSaving', () => {
     expect(defaults.keyBindings.length > 0).toBe(true);
 
     // Should have all expected default bindings
-    const expectedActions = [
-      'slower',
-      'faster',
-      'rewind',
-      'advance',
-      'reset',
-      'fast',
-      'display',
-      'mark',
-      'jump',
-    ];
+    const expectedActions = ['fast', 'fast', 'fast', 'fast', 'toggleAdvance', 'fast'];
     const actualActions = defaults.keyBindings.map((b) => b.action);
 
-    expectedActions.forEach((action) => {
-      expect(actualActions.includes(action)).toBe(true);
-    });
+    expect(actualActions).toEqual(expectedActions);
+    expect(defaults.keyBindings.map((b) => b.value)).toEqual([1.25, 1.5, 2, 3, 3, 1]);
+    expect(defaults.keyBindings.find((b) => b.action === 'toggleAdvance').interval).toBe(0.9);
+    expect(defaults.keyBindings.at(-1).code).toBe('Digit0');
   });
 
   it('DEFAULT_SETTINGS keyBindings should have proper structure', () => {
@@ -88,13 +80,14 @@ describe('KeyboardShortcutsSaving', () => {
     ];
 
     const config1 = new window.VSC.VideoSpeedConfig();
+    await config1.load();
     await config1.save({ keyBindings: existingBindings });
 
     // Load with new instance to verify persistence
     const config2 = new window.VSC.VideoSpeedConfig();
     await config2.load();
 
-    expect(config2.settings.keyBindings.length >= existingBindings.length).toBe(true);
+    expect(config2.settings.keyBindings).toEqual(existingBindings);
 
     // Verify bindings were loaded correctly
     const slowerBinding = config2.settings.keyBindings.find((b) => b.action === 'slower');
@@ -103,6 +96,7 @@ describe('KeyboardShortcutsSaving', () => {
 
   it('Should save keyBindings to storage correctly', async () => {
     const config1 = new window.VSC.VideoSpeedConfig();
+    await config1.load();
 
     const customBindings = [
       { action: 'slower', key: 81, value: 0.15, force: true, predefined: true }, // Q key
@@ -116,7 +110,7 @@ describe('KeyboardShortcutsSaving', () => {
     await config2.load();
 
     expect(config2.settings.keyBindings).toBeDefined();
-    expect(config2.settings.keyBindings.length >= customBindings.length).toBe(true);
+    expect(config2.settings.keyBindings).toEqual(customBindings);
   });
 
   it('Should maintain consistency across load/save cycles', async () => {
@@ -127,6 +121,7 @@ describe('KeyboardShortcutsSaving', () => {
 
     // Save bindings
     const config1 = new window.VSC.VideoSpeedConfig();
+    await config1.load();
     await config1.save({ keyBindings: originalBindings });
 
     // Load with new instance
@@ -156,22 +151,14 @@ describe('KeyboardShortcutsSaving', () => {
   });
 
   // Regression Prevention tests
-  it('Should never lose all keyboard shortcuts', async () => {
-    // This test specifically prevents the original bug from returning
-
-    // Test that default shortcuts are always available
+  it('Should preserve deliberately deleting every shortcut across a reload', async () => {
     const config = new window.VSC.VideoSpeedConfig();
     await config.load();
-
-    // Should always have shortcuts
-    expect(config.settings.keyBindings && config.settings.keyBindings.length > 0).toBe(true);
-
-    // Should have the essential shortcuts
-    const requiredActions = ['slower', 'faster', 'display'];
-    for (const action of requiredActions) {
-      const binding = config.settings.keyBindings.find((b) => b.action === action);
-      expect(binding).toBeDefined();
-    }
+    await config.save({ keyBindings: [] });
+    const reloaded = new window.VSC.VideoSpeedConfig();
+    await reloaded.load();
+    expect(reloaded.settings.keyBindings).toEqual([]);
+    expect(getMockStorage().keyBindings).toEqual([]);
   });
 
   it('Fresh install should always have functional default shortcuts', async () => {
@@ -182,17 +169,7 @@ describe('KeyboardShortcutsSaving', () => {
     await config.load();
 
     // Should have all expected default shortcuts
-    const requiredActions = [
-      'slower',
-      'faster',
-      'rewind',
-      'advance',
-      'reset',
-      'fast',
-      'display',
-      'mark',
-      'jump',
-    ];
+    const requiredActions = ['fast', 'toggleAdvance'];
 
     for (const action of requiredActions) {
       const binding = config.settings.keyBindings.find((b) => b.action === action);

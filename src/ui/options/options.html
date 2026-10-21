@@ -31,11 +31,34 @@
       <section id="customs">
         <h3>Shortcuts</h3>
         <div id="shortcuts-container"></div>
+        <p class="shortcut-help">
+          Hold speed up: use the chosen speed while held; release returns to 1x. Hold to
+          periodically advance runs while held. Toggle periodically advance starts on one press and
+          stops on the next. Both use advance seconds (first value) and interval seconds (second
+          value). Both modes pause with the video and resume on playback. Cancel periodically
+          advance stops either mode.
+        </p>
+        <p class="shortcut-help">
+          Click a shortcut field, then press a key, a mouse side/middle button, or scroll the wheel.
+          No modifier key is needed. Wheel directions support toggle, cancel, and single actions;
+          use a mouse button for holds. All shortcuts can be changed or removed. Site number-key
+          shortcuts are blocked outside text fields.
+        </p>
         <button id="add">Add New</button>
       </section>
 
       <section>
         <h3>Preferences</h3>
+        <div class="row">
+          <label for="alwaysShowPeriodicallyAdvanceStatus"
+            >Always Show Periodically Advance Status<br />
+            <em
+              >Click A to start periodic advance. A with a diagonal slash means it is on; click to
+              stop.</em
+            ></label
+          >
+          <input id="alwaysShowPeriodicallyAdvanceStatus" type="checkbox" />
+        </div>
         <div class="row">
           <label for="audioBoolean"
             >Audio support<br />

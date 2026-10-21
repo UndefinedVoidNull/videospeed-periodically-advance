@@ -43,6 +43,23 @@ A bulk VSC command must claim one generation, not one generation per loop iterat
 
 ## Local phases
 
+Extension **Hold speed up** shortcuts adapt their press and release to the
+existing `USER_SET` row (transition-table cells 5/12): press sets the configured
+speed, release sets 1x. Repeated keydowns do not issue additional commands.
+Window blur, page hide, text-field focus, and extension teardown also terminate
+the hold. These are explicit VSC commands, so they use the same authority batch,
+echo filter, and optional persistence as other keyboard speed commands. No
+arbiter or TLA+ transition changes are needed. **Hold to periodically advance**
+and **Toggle periodically advance** issue only seek commands and never change
+speed authority. **Cancel periodically advance** clears both forms of seek
+timer, preserving any held speed action. Keyboard, mouse-side and middle-button
+shortcuts all use the same VSC command adapter; no classifier heuristic or
+arbitration transition changes are required for the added input sources.
+Periodic seeks skip paused or ended targets independently. The timer remains
+enabled across pause/play, with no catch-up seeks after playback resumes.
+This filter applies only to periodic seek commands, not manual Advance, and
+does not change a speed-arbitration transition or authority.
+
 | Phase        | Meaning                                                                     | Lifecycle behavior                                              |
 | ------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `NO_OPINION` | No shared desired speed exists                                              | Silent; never writes a baseline                                 |

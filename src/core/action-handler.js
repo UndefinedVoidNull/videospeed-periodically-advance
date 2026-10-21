@@ -27,8 +27,9 @@ class ActionHandler {
    * @param {string} action - Action to perform
    * @param {*} value - Action value
    * @param {Event} e - Event object (optional)
+   * @param {{playingOnly?: boolean}} [options] - Skip paused/ended media for periodic seeks
    */
-  runAction(action, value, e) {
+  runAction(action, value, e, { playingOnly = false } = {}) {
     // Use state manager for complete media discovery (includes shadow DOM)
     const mediaTags = window.VSC.stateManager
       ? window.VSC.stateManager.getControlledElements()
@@ -45,6 +46,12 @@ class ActionHandler {
       const controller = v.vsc?.div;
 
       if (!controller) {
+        return;
+      }
+
+      // Periodic seeks follow each target's live playback state. Keep this
+      // per-media so a playing video never causes a paused sibling to jump.
+      if (playingOnly && (v.paused || v.ended)) {
         return;
       }
 

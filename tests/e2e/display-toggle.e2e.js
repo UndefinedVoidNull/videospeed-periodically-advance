@@ -266,6 +266,15 @@ async function testDisplayToggle() {
     if (!found) {
       throw new Error('Controller never appeared');
     }
+    // Visibility is configurable; the user's new default shortcut set omits V.
+    await page.evaluate(() =>
+      window.VSC_controller.config.settings.keyBindings.push({
+        action: 'display',
+        code: 'KeyV',
+        key: 86,
+        value: 0,
+      })
+    );
 
     // The fixture is file://, so install the actual production defaults after
     // resolving their domain markers as YouTube. This keeps the matrix on the
@@ -395,6 +404,12 @@ async function testDisplayToggle() {
       { timeout: 15000, polling: 100 }
     );
     await page.evaluate(() => {
+      window.VSC_controller.config.settings.keyBindings.push({
+        action: 'display',
+        code: 'KeyV',
+        key: 86,
+        value: 0,
+      });
       const first = document.getElementById('videoA').vsc.div;
       const second = document.getElementById('videoB').vsc.div;
       for (const host of [first, second]) {

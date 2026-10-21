@@ -59,8 +59,8 @@ describe('ModuleIntegration', () => {
     new window.VSC.ActionHandler(config, eventManager);
 
     // Should be able to get key bindings
-    const fasterValue = config.getKeyBinding('faster');
-    expect(typeof fasterValue).toBe('number');
+    const preferredValue = config.getKeyBinding('fast');
+    expect(preferredValue).toBe(1.25);
   });
 
   it('VideoController should integrate with all dependencies', async () => {

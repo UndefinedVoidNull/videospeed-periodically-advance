@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Keyboard shortcut regression fixture</title>
+    <script>
+      // Deliberately attach at window capture during parsing, before the main
+      // extension bundle runs at document_idle (the old interception race).
+      window.siteNumberEvents = [];
+      for (const type of ['keydown', 'keyup']) {
+        window.addEventListener(
+          type,
+          (event) => {
+            if (/^[0-9]$/.test(event.key)) {
+              window.siteNumberEvents.push({ type, key: event.key });
+            }
+          },
+          true
+        );
+      }
+    </script>
+  </head>
+  <body>
+    <video
+      id="video"
+      controls
+      muted
+      loop
+      style="width: 640px; height: 100px"
+      src="fixtures/test.wav"
+    ></video>
+    <input id="text" aria-label="Text field" />
+    <input id="slider" type="range" aria-label="Player slider" />
+  </body>
+</html>

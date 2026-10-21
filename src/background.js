@@ -75,22 +75,15 @@ async function migrateConfig() {
 // guaranteed persistence). Content scripts that load before this completes
 // use the legacy keyCode fallback path in event-manager.js.
 
-import {
-  PREDEFINED_CODE_MAP,
-  KEYCODE_TO_CODE,
-  displayKeyFromCode,
-  PREDEFINED_ACTIONS,
-  DEFAULT_BINDINGS,
-} from './utils/key-maps.js';
+import { PREDEFINED_CODE_MAP, KEYCODE_TO_CODE, displayKeyFromCode } from './utils/key-maps.js';
 
 /**
  * Migrate key bindings from v1 (keyCode integers) to v2 (event.code strings).
  *
- * Four phases:
+ * Three phases:
  *   1. Predefined bindings — hardcoded map, zero ambiguity
  *   2. Custom bindings — KEYCODE_TO_CODE best-effort lookup
  *   3. Unmappable keyCodes — set code: null (already broken, user re-records)
- *   4. Ensure all 9 predefined actions exist (replaces ensureDisplayBinding)
  *
  * Single atomic chrome.storage.sync.set() call. Idempotent — safe to re-run.
  */
@@ -160,20 +153,6 @@ async function migrateKeyBindingsV2() {
         displayKey: '',
       };
     });
-
-    // Phase 4: Ensure all 9 predefined actions exist
-    const existingActions = new Set(migrated.map((b) => b.action));
-    for (const action of PREDEFINED_ACTIONS) {
-      if (!existingActions.has(action)) {
-        const defaults = DEFAULT_BINDINGS[action];
-        migrated.push({
-          action,
-          ...defaults,
-          predefined: true,
-        });
-        console.info(`[VSC] Migration: added missing predefined action "${action}"`);
-      }
-    }
 
     // Single atomic write
     await chrome.storage.sync.set({

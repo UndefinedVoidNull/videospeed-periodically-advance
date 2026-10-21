@@ -11,6 +11,8 @@ import {
   PREDEFINED_ACTIONS,
   BLACKLISTED_CODES,
   DEFAULT_BINDINGS,
+  DEFAULT_SHORTCUTS,
+  DEFAULT_PERIODIC_ADVANCE,
 } from './key-maps.js';
 import { DEFAULT_CONTROLLER_CSS } from '../styles/controller-css-defaults.js';
 
@@ -37,14 +39,11 @@ if (!window.VSC.Constants.DEFAULT_SETTINGS) {
     exclusiveKeys: false, // default: false
     audioBoolean: true, // default: true (enable audio controller support)
     startHidden: false, // default: false
+    alwaysShowPeriodicallyAdvanceStatus: true,
     controllerOpacity: 0.3, // default: 0.3
     controllerButtonSize: 14,
     customCSS: '', // user's additional CSS injected alongside the built-in defaults
-    keyBindings: PREDEFINED_ACTIONS.map((action) => ({
-      action,
-      ...DEFAULT_BINDINGS[action],
-      predefined: true,
-    })),
+    keyBindings: DEFAULT_SHORTCUTS.map((binding) => ({ ...binding })),
     siteRules: [
       { pattern: 'imgur.com', enabled: false, speed: null },
       { pattern: 'teams.microsoft.com', enabled: false, speed: null },
@@ -100,7 +99,7 @@ meet.google.com`.replace(regStrip, ''),
     AUDIO_MIN_HEIGHT: 20,
   };
 
-  const CUSTOM_ACTIONS_NO_VALUES = ['pause', 'muted', 'mark', 'jump', 'display'];
+  const CUSTOM_ACTIONS_NO_VALUES = ['pause', 'muted', 'mark', 'jump', 'display', 'cancelAdvance'];
 
   // Assign to global namespace
   window.VSC.Constants.LOG_LEVELS = LOG_LEVELS;
@@ -113,4 +112,6 @@ meet.google.com`.replace(regStrip, ''),
   window.VSC.Constants.displayKeyFromCode = displayKeyFromCode;
   window.VSC.Constants.BLACKLISTED_CODES = BLACKLISTED_CODES;
   window.VSC.Constants.PREDEFINED_ACTIONS = PREDEFINED_ACTIONS;
+  window.VSC.Constants.DEFAULT_BINDINGS = DEFAULT_BINDINGS;
+  window.VSC.Constants.DEFAULT_PERIODIC_ADVANCE = DEFAULT_PERIODIC_ADVANCE;
 }

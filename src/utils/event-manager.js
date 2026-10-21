@@ -2,6 +2,13 @@
  * Event management system for Video Speed Controller
  */
 
+import {
+  getMouseInputCode,
+  isWheelInput,
+  HOLD_ACTIONS,
+  MOUSE_INPUT_LABELS,
+} from './shortcut-inputs.js';
+
 window.VSC = window.VSC || {};
 
 class EventManager {
@@ -9,9 +16,19 @@ class EventManager {
     this.config = config;
     this.actionHandler = actionHandler;
     this.listeners = new Map();
+    this.keyboardSubscriptions = [];
+    this.heldActions = new Map();
+    this.blockedNumberKeys = new Set();
+    this.consumedKeys = new Set();
+    this.pressedMouseButtons = new Set();
+    this.wheelTargets = new Map();
+    this.wheelToggleTimers = new Map();
+    this.periodicAdvance = null;
+    this.lastPeriodicAdvanceBinding = null;
+    this.shortcutBindingsSignature = this.getShortcutBindingsSignature(config.settings.keyBindings);
 
     // Event deduplication to prevent duplicate key processing
-    this.lastKeyEventSignature = null;
+    this.processedKeyEvents = new WeakSet();
 
     // Decision core: classifier (gesture evidence -> verdicts) + arbiter
     // (pure transition table). See docs/speed-arbitration.md. This module
@@ -50,21 +67,170 @@ class EventManager {
     docs.forEach((doc) => {
       const keydownHandler = (event) => this.handleKeydown(event);
       const keyupHandler = (event) => this.handleKeyup(event);
-      doc.addEventListener('keydown', keydownHandler, true);
-      doc.addEventListener('keyup', keyupHandler, true);
+      const mouseHandler = (event) => this.handleMouseShortcut(event);
+      const view = doc.defaultView;
+      const dispatcher = view?.VSC?.keyboardDispatcher;
+      if (dispatcher) {
+        this.keyboardSubscriptions.push(
+          dispatcher.subscribe((event) => {
+            if (event.type === 'keydown') {
+              keydownHandler(event);
+            } else if (event.type === 'keyup') {
+              keyupHandler(event);
+            } else {
+              mouseHandler(event);
+            }
+          })
+        );
+      } else {
+        // Fallback for standalone construction and older injected bundles.
+        const target = view || doc;
+        target.addEventListener('keydown', keydownHandler, true);
+        target.addEventListener('keyup', keyupHandler, true);
+        for (const type of ['mousedown', 'mouseup', 'auxclick']) {
+          target.addEventListener(type, mouseHandler, true);
+        }
+        if (!this.listeners.has(target)) {
+          this.listeners.set(target, []);
+        }
+        this.listeners
+          .get(target)
+          .push(
+            { type: 'keydown', handler: keydownHandler, useCapture: true },
+            { type: 'keyup', handler: keyupHandler, useCapture: true }
+          );
+        for (const type of ['mousedown', 'mouseup', 'auxclick']) {
+          this.listeners.get(target).push({ type, handler: mouseHandler, useCapture: true });
+        }
+      }
 
-      // Store references for cleanup. Keyup only retires the short-lived
-      // YouTube Space-hold signature; it never handles VSC shortcuts.
+      // Opt in only when a wheel binding exists. An unconditional modern wheel
+      // listener would suppress Chromium's legacy mousewheel dispatch (#1598).
+      if (view && !this.wheelTargets.has(view)) {
+        this.wheelTargets.set(view, { handler: mouseHandler, active: false });
+      }
+
+      const clearHolds = () => this.clearHeldActions();
+      const visibilityHandler = () => {
+        if (doc.hidden) {
+          clearHolds();
+        }
+      };
+      const focusHandler = (event) => {
+        if (this.isTypingContext(event.composedPath?.()[0] || event.target)) {
+          clearHolds();
+        }
+      };
+      doc.addEventListener('visibilitychange', visibilityHandler, true);
+      doc.addEventListener('focusin', focusHandler, true);
       if (!this.listeners.has(doc)) {
         this.listeners.set(doc, []);
       }
       this.listeners
         .get(doc)
         .push(
-          { type: 'keydown', handler: keydownHandler, useCapture: true },
-          { type: 'keyup', handler: keyupHandler, useCapture: true }
+          { type: 'visibilitychange', handler: visibilityHandler, useCapture: true },
+          { type: 'focusin', handler: focusHandler, useCapture: true }
         );
+      if (view) {
+        view.addEventListener('blur', clearHolds);
+        const pagehideHandler = () => {
+          clearHolds();
+          this.cancelPeriodicAdvance();
+        };
+        view.addEventListener('pagehide', pagehideHandler);
+        if (!this.listeners.has(view)) {
+          this.listeners.set(view, []);
+        }
+        this.listeners
+          .get(view)
+          .push(
+            { type: 'blur', handler: clearHolds, useCapture: false },
+            { type: 'pagehide', handler: pagehideHandler, useCapture: false }
+          );
+      }
     });
+    this.refreshWheelListeners();
+    const settingsHandler = (event) => {
+      if (event.detail?.keyBindings) {
+        const signature = this.getShortcutBindingsSignature(event.detail.keyBindings.newValue);
+        if (signature !== this.shortcutBindingsSignature) {
+          this.shortcutBindingsSignature = signature;
+          this.clearHeldActions();
+          this.cancelPeriodicAdvance();
+          this.lastPeriodicAdvanceBinding = null;
+        }
+        this.refreshWheelListeners();
+      }
+      if (event.detail?.alwaysShowPeriodicallyAdvanceStatus) {
+        this.updatePeriodicAdvanceStatus();
+      }
+    };
+    const root = document.documentElement;
+    root.addEventListener('VSC_STORAGE_CHANGED', settingsHandler);
+    if (!this.listeners.has(root)) {
+      this.listeners.set(root, []);
+    }
+    this.listeners
+      .get(root)
+      .push({ type: 'VSC_STORAGE_CHANGED', handler: settingsHandler, useCapture: false });
+  }
+
+  refreshWheelListeners() {
+    const enabled = this.config.settings.keyBindings.some((binding) => isWheelInput(binding.code));
+    this.wheelTargets.forEach((entry, target) => {
+      if (enabled && !entry.active) {
+        target.addEventListener('wheel', entry.handler, { capture: true, passive: false });
+      } else if (!enabled && entry.active) {
+        target.removeEventListener('wheel', entry.handler, true);
+      }
+      entry.active = enabled;
+    });
+  }
+
+  getShortcutBindingsSignature(bindings) {
+    return JSON.stringify(
+      (bindings || []).map((binding) => [
+        binding.action,
+        binding.code,
+        binding.keyCode ?? binding.key,
+        binding.value,
+        binding.interval,
+        ...['ctrl', 'alt', 'shift', 'meta'].map((modifier) => !!binding.modifiers?.[modifier]),
+      ])
+    );
+  }
+
+  isPeriodicAdvanceActive() {
+    return (
+      !!this.periodicAdvance ||
+      [...this.heldActions.values()].some((held) => held.action === 'holdAdvance')
+    );
+  }
+
+  updatePeriodicAdvanceStatus() {
+    for (const media of window.VSC.stateManager?.getControlledElements() || []) {
+      media.vsc?.updatePeriodicAdvanceStatus?.();
+    }
+  }
+
+  getPeriodicAdvanceBinding() {
+    const valid = (binding) =>
+      binding &&
+      Number.isFinite(binding.value) &&
+      binding.value > 0 &&
+      Number.isFinite(binding.interval) &&
+      binding.interval > 0;
+    return (
+      this.lastPeriodicAdvanceBinding ||
+      this.config.settings.keyBindings.find(
+        (binding) => binding.action === 'toggleAdvance' && valid(binding)
+      ) ||
+      this.config.settings.keyBindings.find(
+        (binding) => binding.action === 'holdAdvance' && valid(binding)
+      ) ||
+      window.VSC.Constants.DEFAULT_PERIODIC_ADVANCE
+    );
   }
 
   /**
@@ -89,18 +255,18 @@ class EventManager {
       return;
     }
 
-    // Event deduplication — include code+key to handle empty-code cases
-    const eventSignature = `${event.code}_${event.key}_${event.timeStamp}_${event.type}`;
-    if (this.lastKeyEventSignature === eventSignature) {
+    // Deduplicate the event itself. Distinct repeat events can share a rounded
+    // timestamp and must still be suppressed before reaching the site player.
+    if (this.processedKeyEvents.has(event)) {
       return;
     }
-    this.lastKeyEventSignature = eventSignature;
+    this.processedKeyEvents.add(event);
 
     // Presence evidence regardless of what the key does (quiet axis).
     this.arbitration.classifier.observeInput(event);
 
     // Ignore keydown event if typing in an input box
-    if (this.isTypingContext(event.target)) {
+    if (this.isTypingContext(event.composedPath?.()[0] || event.target)) {
       return false;
     }
 
@@ -112,16 +278,34 @@ class EventManager {
       return false;
     }
 
+    // Suppress all plain number keys, even those without a VSC binding. Listen
+    // at window capture and stop same-target listeners as well as later phases.
+    // code/keyCode cover numpad keys and keyboards reporting an empty key.
+    const keyId = this.getKeyIdentity(event);
+    if (this.isPlainNumberKey(event)) {
+      this.blockedNumberKeys.add(keyId);
+      this.suppressKey(event);
+    }
+
+    // Auto-repeat must not create extra intervals or toggle a held speed.
+    if (this.heldActions.has(keyId)) {
+      this.suppressKey(event);
+      return false;
+    }
+
     // Find matching key binding using the three-tier algorithm
     const keyBinding = this.findMatchingBinding(event);
 
     if (keyBinding) {
-      this.actionHandler.runAction(keyBinding.action, keyBinding.value, event);
-
-      if (this.config.settings.exclusiveKeys) {
-        event.preventDefault();
-        event.stopPropagation();
+      if (
+        HOLD_ACTIONS.includes(keyBinding.action) ||
+        ['toggleAdvance', 'cancelAdvance'].includes(keyBinding.action) ||
+        this.config.settings.exclusiveKeys
+      ) {
+        this.consumedKeys.add(keyId);
+        this.suppressKey(event);
       }
+      this.activateShortcut(keyBinding, keyId, event);
     } else {
       // Unhandled key — possibly a native site shortcut. Whether it counts
       // as gesture evidence is the classifier's ruling (native speed
@@ -136,15 +320,230 @@ class EventManager {
   }
 
   /**
-   * Retire a native Space hold after its physical key release. The classifier
-   * owns host detection and media attribution; arbitration owns restoration.
+   * Stop extension holds and retire native site hold evidence on release.
    * @param {KeyboardEvent} event
    * @private
    */
   handleKeyup(event) {
+    const keyId = this.getKeyIdentity(event);
+    if (this.consumedKeys.delete(keyId)) {
+      this.suppressKey(event);
+    }
+    if (this.blockedNumberKeys.delete(keyId)) {
+      this.suppressKey(event);
+    }
+    if (this.heldActions.has(keyId)) {
+      this.suppressKey(event);
+      this.stopHeldAction(keyId);
+    }
     const media = this.arbitration.classifier.observeKeyEnd(event);
     if (media) {
       this.arbitration.noteTemporaryOverrideEnd(media);
+    }
+  }
+
+  activateShortcut(binding, keyId, event) {
+    if (HOLD_ACTIONS.includes(binding.action)) {
+      if (!event.repeat && !isWheelInput(keyId)) {
+        this.startHeldAction(keyId, binding);
+      }
+    } else if (binding.action === 'toggleAdvance') {
+      if (!event.repeat) {
+        this.togglePeriodicAdvance(binding);
+      }
+    } else if (binding.action === 'cancelAdvance') {
+      this.cancelPeriodicAdvance();
+    } else {
+      this.actionHandler.runAction(binding.action, binding.value, event);
+    }
+  }
+
+  handleMouseShortcut(event) {
+    const code = getMouseInputCode(event);
+    if (!code) {
+      return;
+    }
+    if (event.type === 'mouseup') {
+      const consumed = this.pressedMouseButtons.delete(code);
+      if (this.heldActions.has(code)) {
+        this.stopHeldAction(code);
+        this.suppressKey(event);
+      } else if (consumed) {
+        this.suppressKey(event);
+      }
+      return;
+    }
+    if (
+      this.isTypingContext(event.composedPath?.()[0] || event.target) ||
+      !window.VSC.stateManager?.getControlledElements().length
+    ) {
+      return;
+    }
+    const binding = this.findMatchingBinding({
+      code,
+      keyCode: null,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+      metaKey: event.metaKey,
+    });
+    if (!binding || (isWheelInput(code) && HOLD_ACTIONS.includes(binding.action))) {
+      return;
+    }
+    // Bound mouse actions own their default too: side-button navigation,
+    // middle-click autoscroll/new-tab, and wheel scrolling must not also fire.
+    this.suppressKey(event);
+    if (event.type === 'auxclick') {
+      return;
+    }
+    if (event.type === 'mousedown') {
+      if (this.pressedMouseButtons.has(code)) {
+        return;
+      }
+      this.pressedMouseButtons.add(code);
+    }
+    if (event.type === 'wheel' && binding.action === 'toggleAdvance') {
+      const continuingBurst = this.wheelToggleTimers.has(code);
+      clearTimeout(this.wheelToggleTimers.get(code));
+      this.wheelToggleTimers.set(
+        code,
+        setTimeout(() => this.wheelToggleTimers.delete(code), 250)
+      );
+      if (continuingBurst) {
+        return;
+      }
+    }
+    this.activateShortcut(binding, code, event);
+  }
+
+  createAdvanceTimer(binding, onEmpty) {
+    if (
+      !Number.isFinite(binding.value) ||
+      binding.value <= 0 ||
+      !Number.isFinite(binding.interval) ||
+      binding.interval <= 0
+    ) {
+      return null;
+    }
+    return setInterval(
+      () => {
+        if (!window.VSC.stateManager?.getControlledElements().length) {
+          onEmpty();
+          return;
+        }
+        // Keep the mode enabled while paused, but skip that media's seek.
+        // Resuming uses the next interval; paused ticks are never queued up.
+        this.actionHandler.runAction('advance', binding.value, undefined, { playingOnly: true });
+      },
+      Math.max(1, binding.interval * 1000)
+    );
+  }
+
+  togglePeriodicAdvance(binding = this.getPeriodicAdvanceBinding()) {
+    if (this.isPeriodicAdvanceActive()) {
+      this.cancelPeriodicAdvance();
+      return;
+    }
+    const timer = this.createAdvanceTimer(binding, () => this.cancelPeriodicAdvance());
+    if (timer !== null) {
+      this.periodicAdvance = { timer };
+      this.lastPeriodicAdvanceBinding = { value: binding.value, interval: binding.interval };
+      this.updatePeriodicAdvanceStatus();
+    }
+  }
+
+  cancelPeriodicAdvance() {
+    if (this.periodicAdvance) {
+      clearInterval(this.periodicAdvance.timer);
+      this.periodicAdvance = null;
+    }
+    for (const [keyId, held] of this.heldActions) {
+      if (held.action === 'holdAdvance') {
+        this.stopHeldAction(keyId);
+      }
+    }
+    this.updatePeriodicAdvanceStatus();
+  }
+
+  getKeyIdentity(event) {
+    return event.code && event.code !== 'Unidentified'
+      ? event.code
+      : String(event.keyCode || event.key);
+  }
+
+  isPlainNumberKey(event) {
+    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+      return false;
+    }
+    return (
+      /^[0-9]$/.test(event.key) ||
+      /^(Digit|Numpad)[0-9]$/.test(event.code) ||
+      (event.keyCode >= 48 && event.keyCode <= 57) ||
+      (event.keyCode >= 96 && event.keyCode <= 105)
+    );
+  }
+
+  suppressKey(event) {
+    event.preventDefault();
+    if (event.stopImmediatePropagation) {
+      event.stopImmediatePropagation();
+    } else {
+      event.stopPropagation();
+    }
+  }
+
+  startHeldAction(keyId, binding) {
+    const { action, value, interval } = binding;
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+    if (action === 'holdAdvance' && (!Number.isFinite(interval) || interval <= 0)) {
+      return;
+    }
+    if (action === 'holdAdvance') {
+      this.cancelPeriodicAdvance();
+    }
+    const held = { action, value, timer: null };
+    this.heldActions.set(keyId, held);
+    if (action === 'holdSpeed') {
+      this.actionHandler.runAction('SET_SPEED', value);
+    } else {
+      // First advance occurs after the configured interval, independent of
+      // OS keyboard repeat delay/rate. Releasing earlier performs no seek.
+      held.timer = this.createAdvanceTimer(binding, () => this.stopHeldAction(keyId));
+      this.lastPeriodicAdvanceBinding = { value, interval };
+      this.updatePeriodicAdvanceStatus();
+    }
+  }
+
+  stopHeldAction(keyId) {
+    const held = this.heldActions.get(keyId);
+    if (!held) {
+      return;
+    }
+    clearInterval(held.timer);
+    this.heldActions.delete(keyId);
+    if (held.action === 'holdAdvance') {
+      this.updatePeriodicAdvanceStatus();
+    }
+    if (held.action === 'holdSpeed') {
+      const remaining = [...this.heldActions.values()].filter(
+        (item) => item.action === 'holdSpeed'
+      );
+      this.actionHandler.runAction('SET_SPEED', remaining.at(-1)?.value ?? 1.0);
+    }
+  }
+
+  clearHeldActions() {
+    const resetSpeed = [...this.heldActions.values()].some((item) => item.action === 'holdSpeed');
+    this.heldActions.forEach((held) => clearInterval(held.timer));
+    this.heldActions.clear();
+    this.blockedNumberKeys.clear();
+    this.consumedKeys.clear();
+    this.pressedMouseButtons.clear();
+    this.updatePeriodicAdvanceStatus();
+    if (resetSpeed) {
+      this.actionHandler.runAction('SET_SPEED', 1.0);
     }
   }
 
@@ -200,6 +599,12 @@ class EventManager {
       }
     }
 
+    // Mouse inputs have no legacy keyboard integer. A cleared shortcut with a
+    // null key must never accidentally match a mouse event's absent keyCode.
+    if (MOUSE_INPUT_LABELS[code]) {
+      return undefined;
+    }
+
     // Tier 3: Legacy fallback — bindings missing code field, match on keyCode
     if (!hasModifier) {
       const legacyMatch = bindings.find((b) => {
@@ -223,8 +628,27 @@ class EventManager {
    * @private
    */
   isTypingContext(target) {
+    const field = target?.closest?.('input, textarea, select');
+    if (field?.nodeName === 'INPUT') {
+      // Player sliders and buttons can retain focus without being text fields.
+      return ![
+        'button',
+        'checkbox',
+        'color',
+        'file',
+        'hidden',
+        'image',
+        'radio',
+        'range',
+        'reset',
+        'submit',
+      ].includes(field.type);
+    }
     return (
-      target.nodeName === 'INPUT' || target.nodeName === 'TEXTAREA' || target.isContentEditable
+      field?.nodeName === 'TEXTAREA' ||
+      field?.nodeName === 'SELECT' ||
+      target?.isContentEditable ||
+      !!target?.closest?.('[contenteditable]:not([contenteditable="false"]), [role="textbox"]')
     );
   }
 
@@ -476,6 +900,18 @@ class EventManager {
    * Clean up all event listeners
    */
   cleanup() {
+    this.clearHeldActions();
+    this.cancelPeriodicAdvance();
+    this.wheelToggleTimers.forEach((timer) => clearTimeout(timer));
+    this.wheelToggleTimers.clear();
+    this.wheelTargets.forEach(({ handler, active }, target) => {
+      if (active) {
+        target.removeEventListener('wheel', handler, true);
+      }
+    });
+    this.wheelTargets.clear();
+    this.keyboardSubscriptions.forEach((unsubscribe) => unsubscribe());
+    this.keyboardSubscriptions = [];
     this.listeners.forEach((eventList, doc) => {
       eventList.forEach(({ type, handler, useCapture }) => {
         try {

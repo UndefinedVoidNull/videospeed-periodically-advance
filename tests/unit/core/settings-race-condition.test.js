@@ -454,9 +454,9 @@ describe('SettingsRaceCondition', () => {
   // ===========================================================================
 
   it('save works correctly when called from load() (keyBindings init)', async () => {
-    // Set keyBindings to empty array (triggers first-time init in load())
+    // Invalid legacy data triggers initialization; an empty array is intentional.
     const storage = getMockStorage();
-    storage.keyBindings = [];
+    storage.keyBindings = null;
 
     // Set up spy BEFORE load() since we want to capture the init write
     const mockSet = vi.fn(async (data) => {
@@ -663,7 +663,7 @@ describe('SettingsRaceCondition', () => {
 
   it('save() inside load() (keyBindings init) is not blocked', async () => {
     const storage = getMockStorage();
-    storage.keyBindings = []; // triggers init path
+    storage.keyBindings = null; // triggers init path
 
     const mockSet = vi.fn(async (data) => {
       return originalSet.call(window.VSC.StorageManager, data);

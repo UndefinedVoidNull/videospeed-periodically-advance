@@ -80,12 +80,16 @@ if (!window.VSC.VideoSpeedConfig) {
 
         // Handle key bindings migration/initialization
         this.settings.keyBindings = (
-          storage.keyBindings || window.VSC.Constants.DEFAULT_SETTINGS.keyBindings
+          Array.isArray(storage.keyBindings)
+            ? storage.keyBindings
+            : window.VSC.Constants.DEFAULT_SETTINGS.keyBindings
         ).map(VideoSpeedConfig.normalizeKeyBinding);
 
-        if (!storage.keyBindings || storage.keyBindings.length === 0) {
+        if (!Array.isArray(storage.keyBindings)) {
           window.VSC.logger.info('First initialization - setting up default key bindings');
-          this.settings.keyBindings = [...window.VSC.Constants.DEFAULT_SETTINGS.keyBindings];
+          this.settings.keyBindings = window.VSC.Constants.DEFAULT_SETTINGS.keyBindings.map(
+            (binding) => ({ ...binding })
+          );
           await this.save({ keyBindings: this.settings.keyBindings });
         }
 
@@ -161,6 +165,9 @@ if (!window.VSC.VideoSpeedConfig) {
         this.settings.exclusiveKeys = Boolean(storage.exclusiveKeys);
         this.settings.audioBoolean = Boolean(storage.audioBoolean);
         this.settings.startHidden = Boolean(storage.startHidden);
+        this.settings.alwaysShowPeriodicallyAdvanceStatus = Boolean(
+          storage.alwaysShowPeriodicallyAdvanceStatus
+        );
         this.settings.controllerOpacity = Number(storage.controllerOpacity);
         this.settings.controllerButtonSize = Number(storage.controllerButtonSize);
         // One-time migration: drop legacy controllerCSS key, reset to new model.
@@ -329,7 +336,7 @@ if (!window.VSC.VideoSpeedConfig) {
      */
     static normalizeKeyBinding(binding) {
       if (!binding || !binding.modifiers) {
-        return binding;
+        return binding ? { ...binding } : binding;
       }
       const m = binding.modifiers;
       const normalized = {

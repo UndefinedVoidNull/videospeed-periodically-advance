@@ -43,6 +43,16 @@ describe('Settings', () => {
     expect(settings.lastSpeed).toBeNull(); // no user choice yet
   });
 
+  it('defaults Always Show Periodically Advance Status to on and persists an explicit opt-out', async () => {
+    const config = new window.VSC.VideoSpeedConfig();
+    await config.load();
+    expect(config.settings.alwaysShowPeriodicallyAdvanceStatus).toBe(true);
+    await config.save({ alwaysShowPeriodicallyAdvanceStatus: false });
+    const reloaded = new window.VSC.VideoSpeedConfig();
+    await reloaded.load();
+    expect(reloaded.settings.alwaysShowPeriodicallyAdvanceStatus).toBe(false);
+  });
+
   it('VideoSpeedConfig should save settings to storage', async () => {
     const config = window.VSC.videoSpeedConfig;
     await config.load();
@@ -59,6 +69,9 @@ describe('Settings', () => {
 
     // Load settings with defaults
     await config.load();
+    await config.save({
+      keyBindings: [{ action: 'faster', key: 68, value: 0.1 }],
+    });
 
     const fasterValue = config.getKeyBinding('faster');
     expect(fasterValue).toBe(0.1);

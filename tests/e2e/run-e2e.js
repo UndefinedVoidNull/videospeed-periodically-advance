@@ -31,7 +31,9 @@ async function runE2ETests() {
   const testType = process.argv[2];
   let testFiles;
 
-  if (testType === 'youtube') {
+  if (testType === 'keyboard') {
+    testFiles = ['keyboard-shortcuts.e2e.js'];
+  } else if (testType === 'youtube') {
     testFiles = ['youtube.e2e.js'];
   } else if (testType === 'basic') {
     testFiles = ['basic.e2e.js'];
@@ -52,6 +54,7 @@ async function runE2ETests() {
       'display-toggle.e2e.js',
       'speed-arbitration.e2e.js',
       'lifecycle.e2e.js',
+      'keyboard-shortcuts.e2e.js',
     ];
   }
 

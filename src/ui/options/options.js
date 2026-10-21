@@ -13,6 +13,13 @@ import '../../core/settings.js';
 
 // UI helpers
 import { createRow } from './row-renderer.js';
+import {
+  getMouseInputCode,
+  MOUSE_INPUT_LABELS,
+  isWheelInput,
+  HOLD_ACTIONS,
+  PERIODIC_ADVANCE_ACTIONS,
+} from '../../utils/shortcut-inputs.js';
 
 // Initialize global namespace for options page
 window.VSC = window.VSC || {};
@@ -94,6 +101,10 @@ const ACTION_OPTIONS = [
   ['advance', 'Advance'],
   ['reset', 'Reset speed'],
   ['fast', 'Preferred speed'],
+  ['holdSpeed', 'Hold speed up'],
+  ['holdAdvance', 'Hold to periodically advance'],
+  ['toggleAdvance', 'Toggle periodically advance'],
+  ['cancelAdvance', 'Cancel periodically advance'],
   ['muted', 'Mute'],
   ['softer', 'Decrease volume'],
   ['louder', 'Increase volume'],
@@ -106,8 +117,9 @@ const ACTION_OPTIONS = [
 // Column spec for shortcut rows (used by createRow)
 const SHORTCUT_COLUMNS = [
   { key: 'action', type: 'select', className: 'customDo', options: ACTION_OPTIONS },
-  { key: 'keyInput', type: 'text', className: 'customKey', placeholder: 'press a key' },
+  { key: 'keyInput', type: 'text', className: 'customKey', placeholder: 'key / mouse' },
   { key: 'value', type: 'text', className: 'customValue', placeholder: 'value (0.10)' },
+  { key: 'interval', type: 'text', className: 'customInterval', placeholder: 'interval (s)' },
 ];
 
 // Column spec for site rule rows
@@ -343,6 +355,9 @@ function formatShortcutDisplay(displayKey, modifiers) {
  * Fallback chain: layoutMap → displayKey → keyCodeAliases → code → "null"
  */
 function resolveDisplayLabel(binding) {
+  if (MOUSE_INPUT_LABELS[binding.code]) {
+    return formatShortcutDisplay(MOUSE_INPUT_LABELS[binding.code], binding.modifiers);
+  }
   // Try layout map first (most accurate for current keyboard)
   if (layoutMap && binding.code) {
     const mapped = layoutMap.get(binding.code);
@@ -383,7 +398,7 @@ function autoSizeKeyInput(input) {
   document.body.appendChild(span);
   const textWidth = span.offsetWidth;
   document.body.removeChild(span);
-  input.style.width = `${Math.max(minWidth, textWidth + 26)}px`;
+  input.style.width = `${Math.max(minWidth, textWidth + 38)}px`;
 }
 
 function recordKeyPress(e) {
@@ -460,6 +475,40 @@ function recordKeyPress(e) {
   e.stopPropagation();
 }
 
+function recordMouseShortcut(event) {
+  const input = event.target.classList?.contains('customKey')
+    ? event.target
+    : document.activeElement;
+  if (!input?.classList.contains('customKey')) {
+    return;
+  }
+  const code = getMouseInputCode(event);
+  if (!code) {
+    return;
+  }
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (event.type === 'mouseup' || event.type === 'auxclick') {
+    return;
+  }
+  input.focus();
+  input.code = code;
+  input.keyCode = null;
+  input.displayKey = MOUSE_INPUT_LABELS[code];
+  input.modifiers = undefined;
+  input.value = input.displayKey;
+  autoSizeKeyInput(input);
+  clearWarning(input);
+  const action = input.closest('.customs').querySelector('.customDo').value;
+  if (isWheelInput(code) && HOLD_ACTIONS.includes(action)) {
+    showWarning(
+      input,
+      'Wheel directions cannot be held. Choose a toggle, cancel, or single action.'
+    );
+  }
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function showWarning(input, message) {
   clearWarning(input);
   const warn = document.createElement('span');
@@ -520,7 +569,7 @@ function setShortcutInput(input, binding) {
 }
 
 /**
- * Add a shortcut row (custom, not predefined).
+ * Add an editable, removable shortcut row, including legacy predefined bindings.
  * @param {Object} [data] - Optional initial data { action, value }
  * @returns {HTMLElement} The created row
  */
@@ -530,51 +579,39 @@ function add_shortcut(data = {}) {
     className: 'customs',
     removable: true,
   });
-  // Hide value input for actions that don't need values
-  const action = data.action || row.querySelector('.customDo').value;
-  if (window.VSC.Constants.CUSTOM_ACTIONS_NO_VALUES.includes(action)) {
-    row.querySelector('.customValue').style.display = 'none';
-  }
+  updateShortcutFields(row);
   return row;
 }
 
-/**
- * Add a predefined shortcut row (fixed action, no remove button).
- * @param {Object} data - Binding data { action, value, ... }
- * @returns {HTMLElement} The created row
- */
-function add_predefined_shortcut(data) {
-  const container = document.getElementById('shortcuts-container');
-  const row = createRow(
-    container,
-    SHORTCUT_COLUMNS,
-    { action: data.action },
-    {
-      className: 'customs',
-      id: data.action,
-      removable: false,
-    }
-  );
-  // Predefined rows: lock the action dropdown
-  const select = row.querySelector('.customDo');
-  select.disabled = true;
-  // Set key input
-  setShortcutInput(row.querySelector('.customKey'), data);
-  // Set value input
-  const valueInput = row.querySelector('.customValue');
-  valueInput.value = data.value;
-  // Hide value input for actions that don't need values
-  if (window.VSC.Constants.CUSTOM_ACTIONS_NO_VALUES.includes(data.action)) {
-    valueInput.style.display = 'none';
+function updateShortcutFields(row) {
+  const action = row.querySelector('.customDo').value;
+  const value = row.querySelector('.customValue');
+  const interval = row.querySelector('.customInterval');
+  const noValue = window.VSC.Constants.CUSTOM_ACTIONS_NO_VALUES.includes(action);
+  const holdAdvance = PERIODIC_ADVANCE_ACTIONS.includes(action);
+  row.classList.toggle('no-value', noValue);
+  row.classList.toggle('hold-advance', holdAdvance);
+  value.hidden = noValue;
+  interval.hidden = !holdAdvance;
+  value.title = holdAdvance ? 'Seconds to advance each time' : 'Action value';
+  value.setAttribute('aria-label', value.title);
+  interval.title = 'Interval between advances (seconds)';
+  interval.setAttribute('aria-label', interval.title);
+  if (holdAdvance) {
+    value.placeholder = 'advance (s)';
+    interval.value ||= '0.5';
+    value.value ||= '3';
+  } else if (action === 'holdSpeed') {
+    value.title = 'Playback speed while held; release returns to 1x';
+    value.setAttribute('aria-label', value.title);
+    value.value ||= '6';
   }
-  return row;
 }
 
 function createKeyBindings(item) {
   const action = item.querySelector('.customDo').value;
   const input = item.querySelector('.customKey');
   const value = Number(item.querySelector('.customValue').value);
-  const predefined = !!item.id;
 
   const binding = {
     action: action,
@@ -583,8 +620,12 @@ function createKeyBindings(item) {
     keyCode: input.keyCode, // NEW field name — canonical legacy integer
     displayKey: input.displayKey, // display-friendly from event.key
     value: value,
-    predefined: predefined,
+    predefined: false,
   };
+
+  if (PERIODIC_ADVANCE_ACTIONS.includes(action)) {
+    binding.interval = Number(item.querySelector('.customInterval').value);
+  }
 
   // Only include modifiers when at least one is true
   if (input.modifiers) {
@@ -655,6 +696,50 @@ function validate() {
 
   const regEndsWithFlags = window.VSC.Constants.regEndsWithFlags;
 
+  for (const row of document.querySelectorAll('.customs')) {
+    const action = row.querySelector('.customDo').value;
+    const valueInput = row.querySelector('.customValue');
+    const intervalInput = row.querySelector('.customInterval');
+    valueInput.setCustomValidity('');
+    intervalInput.setCustomValidity('');
+    const keyInput = row.querySelector('.customKey');
+    keyInput.setCustomValidity('');
+    if (HOLD_ACTIONS.includes(action) && isWheelInput(keyInput.code)) {
+      keyInput.setCustomValidity(
+        'Wheel directions cannot be held. Use a mouse button or a toggle action.'
+      );
+      keyInput.reportValidity();
+      return false;
+    }
+    if (PERIODIC_ADVANCE_ACTIONS.includes(action) || action === 'holdSpeed') {
+      const value = Number(valueInput.value);
+      const interval = Number(intervalInput.value);
+      if (
+        !Number.isFinite(value) ||
+        value <= 0 ||
+        (action === 'holdSpeed' &&
+          (value < window.VSC.Constants.SPEED_LIMITS.MIN ||
+            value > window.VSC.Constants.SPEED_LIMITS.MAX))
+      ) {
+        valueInput.setCustomValidity(
+          action === 'holdSpeed'
+            ? 'Enter a playback speed from 0.07 to 16.'
+            : 'Enter positive seconds.'
+        );
+        valueInput.reportValidity();
+        return false;
+      }
+      if (
+        PERIODIC_ADVANCE_ACTIONS.includes(action) &&
+        (!Number.isFinite(interval) || interval <= 0)
+      ) {
+        intervalInput.setCustomValidity('Enter a positive interval in seconds.');
+        intervalInput.reportValidity();
+        return false;
+      }
+    }
+  }
+
   // Validate site rules
   const rules = collectSiteRules();
   for (const rule of rules) {
@@ -710,7 +795,7 @@ function validate() {
 // Saves options using VideoSpeedConfig system
 async function save_options() {
   if (validate() === false) {
-    return;
+    return false;
   }
 
   const status = document.getElementById('status');
@@ -725,6 +810,9 @@ async function save_options() {
     const exclusiveKeys = document.getElementById('exclusiveKeys').checked;
     const audioBoolean = document.getElementById('audioBoolean').checked;
     const startHidden = document.getElementById('startHidden').checked;
+    const alwaysShowPeriodicallyAdvanceStatus = document.getElementById(
+      'alwaysShowPeriodicallyAdvanceStatus'
+    ).checked;
     const controllerOpacity = Number(document.getElementById('controllerOpacity').value);
     const controllerButtonSize = Number(document.getElementById('controllerButtonSize').value);
     const logLevel = parseInt(document.getElementById('logLevel').value);
@@ -739,7 +827,7 @@ async function save_options() {
         status.textContent = '';
         status.classList.remove('show', 'error');
       }, 5000);
-      return;
+      return false;
     }
 
     // Byte-length guard for chrome.storage.sync (8KB per-item limit)
@@ -751,7 +839,7 @@ async function save_options() {
         status.textContent = '';
         status.classList.remove('show', 'error');
       }, 5000);
-      return;
+      return false;
     }
 
     // Ensure VideoSpeedConfig singleton is initialized
@@ -765,6 +853,7 @@ async function save_options() {
       exclusiveKeys: exclusiveKeys,
       audioBoolean: audioBoolean,
       startHidden: startHidden,
+      alwaysShowPeriodicallyAdvanceStatus,
       controllerOpacity: controllerOpacity,
       controllerButtonSize: controllerButtonSize,
       logLevel: logLevel,
@@ -784,6 +873,7 @@ async function save_options() {
         status.classList.remove('show', 'error');
       }, 3000);
     }
+    return ok;
   } catch (error) {
     console.error('Failed to save options:', error);
     status.textContent = `Error saving options: ${error.message}`;
@@ -792,6 +882,7 @@ async function save_options() {
       status.textContent = '';
       status.classList.remove('show', 'error');
     }, 3000);
+    return false;
   }
 }
 
@@ -811,6 +902,8 @@ async function restore_options() {
     document.getElementById('exclusiveKeys').checked = storage.exclusiveKeys;
     document.getElementById('audioBoolean').checked = storage.audioBoolean;
     document.getElementById('startHidden').checked = storage.startHidden;
+    document.getElementById('alwaysShowPeriodicallyAdvanceStatus').checked =
+      storage.alwaysShowPeriodicallyAdvanceStatus;
     document.getElementById('controllerOpacity').value = storage.controllerOpacity;
     document.getElementById('controllerButtonSize').value = storage.controllerButtonSize;
     document.getElementById('logLevel').value = storage.logLevel;
@@ -833,12 +926,8 @@ async function restore_options() {
     shortcutsContainer.innerHTML = '';
 
     for (const item of bindings) {
-      if (item.predefined) {
-        add_predefined_shortcut(item);
-      } else {
-        const row = add_shortcut({ action: item.action, value: item.value });
-        setShortcutInput(row.querySelector('.customKey'), item);
-      }
+      const row = add_shortcut(item);
+      setShortcutInput(row.querySelector('.customKey'), item);
     }
   } catch (error) {
     console.error('Failed to restore options:', error);
@@ -1037,8 +1126,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   saveBtn.addEventListener('click', async (e) => {
     e.preventDefault();
-    await save_options();
-    markClean();
+    if (await save_options()) {
+      markClean();
+    }
   });
 
   document.getElementById('add').addEventListener('click', () => {
@@ -1121,13 +1211,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.addEventListener('beforeinput', (event) => {
     eventCaller(event, 'customValue', inputFilterNumbersOnly);
+    eventCaller(event, 'customInterval', inputFilterNumbersOnly);
   });
-  document.addEventListener('focus', (event) => {
+  document.addEventListener('focusin', (event) => {
     eventCaller(event, 'customKey', inputFocus);
+    if (event.target.classList.contains('customKey')) {
+      window.addEventListener('wheel', recordMouseShortcut, { capture: true, passive: false });
+    }
   });
-  document.addEventListener('blur', (event) => {
+  document.addEventListener('focusout', (event) => {
     eventCaller(event, 'customKey', inputBlur);
+    if (event.target.classList.contains('customKey')) {
+      window.removeEventListener('wheel', recordMouseShortcut, true);
+    }
   });
+  for (const type of ['mousedown', 'mouseup', 'auxclick']) {
+    window.addEventListener(type, recordMouseShortcut, true);
+  }
   document.addEventListener('keydown', (event) => {
     eventCaller(event, 'customKey', recordKeyPress);
   });
@@ -1140,13 +1240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('change', (event) => {
     eventCaller(event, 'customDo', () => {
       const row = event.target.closest('.row');
-      const valueInput = row.querySelector('.customValue');
-      if (window.VSC.Constants.CUSTOM_ACTIONS_NO_VALUES.includes(event.target.value)) {
-        valueInput.style.display = 'none';
-        valueInput.value = 0;
-      } else {
-        valueInput.style.display = 'inline-block';
-      }
+      updateShortcutFields(row);
     });
   });
 });

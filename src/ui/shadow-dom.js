@@ -72,8 +72,8 @@ class ShadowDOMManager {
         opacity: 0.7;
       }
       
-      #controller:hover>.draggable {
-        margin-right: 0.8em;
+      #controller:hover>#controls {
+        margin-left: 0.8em;
       }
       
       #controls {
@@ -142,6 +142,44 @@ class ShadowDOMManager {
       button.rw {
         opacity: 0.65;
       }
+
+      #periodic-advance-status {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        vertical-align: middle;
+        min-width: 1.4em;
+        height: 1.4em;
+        padding: 0 0.2em;
+        margin: 0 0.25em;
+        color: inherit;
+        background: transparent;
+        font-family: sans-serif;
+        font-weight: bold;
+        text-decoration: none;
+      }
+
+      #periodic-advance-status[aria-pressed="true"]::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 1.3em;
+        height: 0.1em;
+        background: currentColor;
+        transform: translate(-50%, -50%) rotate(45deg);
+        pointer-events: none;
+      }
+
+      #periodic-advance-status[hidden] {
+        display: none !important;
+      }
+
+      #periodic-advance-status:hover {
+        background: #2196f3;
+        color: white;
+      }
     `;
     shadow.appendChild(style);
 
@@ -157,6 +195,16 @@ class ShadowDOMManager {
     draggable.style.cssText = `font-size: ${buttonSize}px;`;
     draggable.textContent = speed;
     controller.appendChild(draggable);
+
+    // Keep status outside the hover-only controls, beside the speed badge.
+    const advanceStatus = document.createElement('button');
+    advanceStatus.type = 'button';
+    advanceStatus.id = 'periodic-advance-status';
+    advanceStatus.dataset.action = 'periodicAdvance';
+    advanceStatus.textContent = 'A';
+    advanceStatus.style.fontSize = `${buttonSize}px`;
+    advanceStatus.hidden = true;
+    controller.appendChild(advanceStatus);
 
     // Create controls span
     const controls = document.createElement('span');
@@ -183,6 +231,7 @@ class ShadowDOMManager {
 
     controller.appendChild(controls);
     shadow.appendChild(controller);
+    this.updatePeriodicAdvanceStatus(shadow, false, false);
 
     window.VSC.logger.debug('Shadow DOM created for video controller');
     return shadow;
@@ -195,6 +244,17 @@ class ShadowDOMManager {
    */
   static getController(shadow) {
     return shadow.querySelector('#controller');
+  }
+
+  static updatePeriodicAdvanceStatus(shadow, active, alwaysShow) {
+    const button = shadow.querySelector('#periodic-advance-status');
+    if (!button) {
+      return;
+    }
+    button.hidden = !active && !alwaysShow;
+    button.setAttribute('aria-pressed', String(active));
+    button.title = active ? 'Stop periodic advance' : 'Start periodic advance';
+    button.setAttribute('aria-label', button.title);
   }
 
   /**

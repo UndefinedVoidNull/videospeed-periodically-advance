@@ -217,8 +217,8 @@ export const PREDEFINED_ACTIONS = [
 
 /**
  * Complete default bindings for all predefined actions (v2 schema).
- * Single source of truth — used by DEFAULT_SETTINGS (constants.js),
- * migration Phase 4 (background.js), and restore_defaults (options.js).
+ * Legacy action defaults, also used by controller buttons when their shortcut
+ * has been removed. These do not imply that a keyboard binding must exist.
  */
 export const DEFAULT_BINDINGS = Object.freeze({
   slower: { code: 'KeyS', key: 83, keyCode: 83, displayKey: 's', value: 0.1 },
@@ -231,6 +231,39 @@ export const DEFAULT_BINDINGS = Object.freeze({
   mark: { code: 'KeyM', key: 77, keyCode: 77, displayKey: 'm', value: 0 },
   jump: { code: 'KeyJ', key: 74, keyCode: 74, displayKey: 'j', value: 0 },
 });
+
+export const DEFAULT_PERIODIC_ADVANCE = Object.freeze({ value: 3, interval: 0.9 });
+
+/** User-editable defaults for new installs and Reset in the options page. */
+export const DEFAULT_SHORTCUTS = Object.freeze([
+  ...[1.25, 1.5, 2, 3].map((value, index) => ({
+    action: 'fast',
+    code: `Digit${index + 1}`,
+    key: 49 + index,
+    keyCode: 49 + index,
+    displayKey: String(index + 1),
+    value,
+    predefined: false,
+  })),
+  {
+    action: 'toggleAdvance',
+    code: 'Backquote',
+    key: 192,
+    keyCode: 192,
+    displayKey: '`',
+    ...DEFAULT_PERIODIC_ADVANCE,
+    predefined: false,
+  },
+  {
+    action: 'fast',
+    code: 'Digit0',
+    key: 48,
+    keyCode: 48,
+    displayKey: '0',
+    value: 1,
+    predefined: false,
+  },
+]);
 
 /** event.code values that must not be recorded as shortcuts. */
 export const BLACKLISTED_CODES = new Set([

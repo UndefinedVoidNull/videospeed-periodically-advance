@@ -66,9 +66,16 @@ class ControlsManager {
       button.addEventListener(
         'click',
         (e) => {
+          if (e.currentTarget.dataset.action === 'periodicAdvance') {
+            this.actionHandler.eventManager?.togglePeriodicAdvance();
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           this.actionHandler.runAction(
             e.target.dataset['action'],
-            this.config.getKeyBinding(e.target.dataset['action']),
+            this.config.getKeyBinding(e.target.dataset['action']) ||
+              window.VSC.Constants.DEFAULT_BINDINGS[e.target.dataset['action']]?.value,
             e
           );
           e.stopPropagation();

@@ -83,6 +83,16 @@ Keyboard and popup display actions broadcast to every attached controller. Each 
 
 ## Formal model
 
+The periodic-advance **A** button is a child of the existing controller beside
+the speed badge, outside its hover-only controls. Its local `hidden` state is
+`!periodicActive && !alwaysShowPeriodicallyAdvanceStatus`. Always-show defaults
+to on: an inactive A is plain and starts the periodic mode when clicked; an
+active A has a diagonal slash and stops it when clicked. A never changes the host override,
+automatic hide, flash timer, or the render precedence above. Pausing a video
+skips seeks but leaves the enabled-mode indicator visible. No formal visibility
+transition changes are required; browser tests cover the child's rendering and
+the existing host visibility matrix.
+
 `specs/ControllerVisibility.tla` uses two controllers, one video and one audio. It explores local toggles, broadcast toggles, automatic and environmental changes, live `startHidden` changes, flash requests, bounded timer progress, expiry, and release. `StopTimerRefresh` is an auxiliary environment action: safety remains checked whether it occurs or not, while its false state marks a suffix in which no more video flash requests re-arm the timer.
 
 TLC checks:

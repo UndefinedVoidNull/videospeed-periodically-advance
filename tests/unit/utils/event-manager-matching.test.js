@@ -316,7 +316,7 @@ describe('EventManager Matching', () => {
 
   // Event deduplication
 
-  it('Event dedup: same code+key+timeStamp+type should be deduplicated', () => {
+  it('Event dedup: the same event object should be processed once', () => {
     const { eventManager, actions } = setupEnv([
       {
         action: 'slower',

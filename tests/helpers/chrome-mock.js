@@ -5,7 +5,6 @@
 const mockStorage = {
   enabled: true,
   lastSpeed: 1.0,
-  keyBindings: [],
   rememberSpeed: false,
 
   audioBoolean: false,
@@ -132,7 +131,6 @@ export function resetMockStorage() {
   Object.assign(mockStorage, {
     enabled: true,
     lastSpeed: 1.0,
-    keyBindings: [],
     rememberSpeed: false,
 
     audioBoolean: false,

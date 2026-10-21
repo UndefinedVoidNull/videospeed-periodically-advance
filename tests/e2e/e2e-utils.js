@@ -27,14 +27,14 @@ export async function launchChromeWithExtension() {
 
   try {
     const browser = await puppeteer.launch({
-      headless: false, // Extensions require non-headless mode
+      headless: process.env.CHROME_HEADLESS === '1',
+      pipe: true,
+      enableExtensions: [extensionPath],
       devtools: false,
       args: [
         // Containerized/root CI environments (no user namespace) need the
         // sandbox disabled; opt in explicitly, never by default.
         ...(process.env.CHROME_NO_SANDBOX ? ['--no-sandbox'] : []),
-        `--load-extension=${extensionPath}`,
-        `--disable-extensions-except=${extensionPath}`,
         '--disable-dev-shm-usage',
         '--disable-gpu',
         '--disable-features=TranslateUI',

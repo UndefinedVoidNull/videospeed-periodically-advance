@@ -48,6 +48,7 @@ class VideoController {
 
     // Create UI
     this.div = this.initializeControls();
+    this.updatePeriodicAdvanceStatus();
 
     // Set up event handlers
     this.setupEventHandlers();
@@ -190,6 +191,17 @@ class VideoController {
 
     window.VSC.logger.debug('initializeControls End');
     return wrapper;
+  }
+
+  /** Reflect the shared mode on this controller without changing its visibility. */
+  updatePeriodicAdvanceStatus() {
+    if (this.div?.shadowRoot) {
+      window.VSC.ShadowDOMManager.updatePeriodicAdvanceStatus(
+        this.div.shadowRoot,
+        this.actionHandler?.eventManager?.isPeriodicAdvanceActive?.() || false,
+        this.config.settings.alwaysShowPeriodicallyAdvanceStatus
+      );
+    }
   }
 
   /**

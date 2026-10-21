@@ -16,20 +16,7 @@ import {
 const Constants = () => window.VSC.Constants;
 const PREDEFINED_CODE_MAP = () => Constants().PREDEFINED_CODE_MAP;
 const KEYCODE_TO_CODE = () => Constants().KEYCODE_TO_CODE;
-const PREDEFINED_ACTIONS = () => Constants().PREDEFINED_ACTIONS;
 const displayKeyFromCode = (...args) => Constants().displayKeyFromCode(...args);
-
-const DEFAULT_V2_BINDINGS = {
-  slower: { code: 'KeyS', key: 83, keyCode: 83, displayKey: 's', value: 0.1, force: false },
-  faster: { code: 'KeyD', key: 68, keyCode: 68, displayKey: 'd', value: 0.1, force: false },
-  rewind: { code: 'KeyZ', key: 90, keyCode: 90, displayKey: 'z', value: 10, force: false },
-  advance: { code: 'KeyX', key: 88, keyCode: 88, displayKey: 'x', value: 10, force: false },
-  reset: { code: 'KeyR', key: 82, keyCode: 82, displayKey: 'r', value: 1.0, force: false },
-  fast: { code: 'KeyG', key: 71, keyCode: 71, displayKey: 'g', value: 1.8, force: false },
-  display: { code: 'KeyV', key: 86, keyCode: 86, displayKey: 'v', value: 0, force: false },
-  mark: { code: 'KeyM', key: 77, keyCode: 77, displayKey: 'm', value: 0, force: false },
-  jump: { code: 'KeyJ', key: 74, keyCode: 74, displayKey: 'j', value: 0, force: false },
-};
 
 /**
  * Extracted migration logic — mirrors migrateKeyBindingsV2() in background.js
@@ -71,13 +58,6 @@ function migrateBindings(storage) {
     unmappableCount++;
     return { ...binding, code: null, keyCode: legacyKey, displayKey: '' };
   });
-
-  const existingActions = new Set(migrated.map((b) => b.action));
-  for (const action of PREDEFINED_ACTIONS()) {
-    if (!existingActions.has(action)) {
-      migrated.push({ action, ...DEFAULT_V2_BINDINGS[action], predefined: true });
-    }
-  }
 
   return {
     keyBindings: migrated,
@@ -249,7 +229,7 @@ describe('Migration', () => {
     expect(slower.key === 83).toBe(true);
   });
 
-  it('Missing predefined actions should be added by Phase 4', () => {
+  it('Missing predefined actions should stay removed after migration', () => {
     // Only 7 of 9 predefined actions present (missing display, jump)
     const v1Bindings = [
       { action: 'slower', key: 83, value: 0.1, force: false, predefined: true },
@@ -264,13 +244,11 @@ describe('Migration', () => {
     const result = migrateBindings({ keyBindings: v1Bindings, schemaVersion: 1 });
 
     const display = result.keyBindings.find((b) => b.action === 'display');
-    expect(display).toBeDefined();
-    expect(display.code).toBe('KeyV');
-    expect(display.predefined).toBe(true);
+    expect(display).toBeUndefined();
 
     const jump = result.keyBindings.find((b) => b.action === 'jump');
-    expect(jump).toBeDefined();
-    expect(jump.code).toBe('KeyJ');
+    expect(jump).toBeUndefined();
+    expect(result.keyBindings).toHaveLength(v1Bindings.length);
   });
 
   it('Migrated bindings should NOT have modifiers object', () => {

@@ -408,6 +408,7 @@ class VideoSpeedExtension {
     }
 
     this.logger.info('Tearing down Video Speed Controller');
+    this.eventManager?.clearHeldActions?.();
 
     // Remove all controllers from tracked media elements
     const videos = window.VSC.stateManager ? window.VSC.stateManager.getAllMediaElements() : [];
