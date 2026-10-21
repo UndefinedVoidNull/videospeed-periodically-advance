@@ -95,7 +95,7 @@ export function findSuccessfulCiRun(runs, commit) {
 
 export function inspectReleaseZip(archivePath, expectedVersion) {
   runFile('unzip', ['-tqq', archivePath]);
-  const entries = runFile('unzip', ['-Z1', archivePath]).split('\n').filter(Boolean);
+  const entries = runFile('unzip', ['-Z1', archivePath]).split(/\r?\n/).filter(Boolean);
   const unsafeEntry = entries.find(
     (entry) => entry.startsWith('/') || entry.split('/').includes('..')
   );
