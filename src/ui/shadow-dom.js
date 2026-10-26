@@ -145,7 +145,7 @@ class ShadowDOMManager {
 
       #periodic-advance-status {
         position: relative;
-        display: inline-flex;
+        display: none;
         align-items: center;
         justify-content: center;
         vertical-align: middle;
@@ -172,8 +172,10 @@ class ShadowDOMManager {
         pointer-events: none;
       }
 
-      #periodic-advance-status[hidden] {
-        display: none !important;
+      :host(:hover) #periodic-advance-status,
+      #controller.dragging #periodic-advance-status,
+      #periodic-advance-status[data-always-show] {
+        display: inline-flex;
       }
 
       #periodic-advance-status:hover {
@@ -196,14 +198,13 @@ class ShadowDOMManager {
     draggable.textContent = speed;
     controller.appendChild(draggable);
 
-    // Keep status outside the hover-only controls, beside the speed badge.
+    // Keep A beside the speed badge so always-show can reveal it independently.
     const advanceStatus = document.createElement('button');
     advanceStatus.type = 'button';
     advanceStatus.id = 'periodic-advance-status';
     advanceStatus.dataset.action = 'periodicAdvance';
     advanceStatus.textContent = 'A';
     advanceStatus.style.fontSize = `${buttonSize}px`;
-    advanceStatus.hidden = true;
     controller.appendChild(advanceStatus);
 
     // Create controls span
@@ -251,7 +252,7 @@ class ShadowDOMManager {
     if (!button) {
       return;
     }
-    button.hidden = !active && !alwaysShow;
+    button.toggleAttribute('data-always-show', Boolean(alwaysShow));
     button.setAttribute('aria-pressed', String(active));
     button.title = active ? 'Stop periodic advance' : 'Start periodic advance';
     button.setAttribute('aria-label', button.title);

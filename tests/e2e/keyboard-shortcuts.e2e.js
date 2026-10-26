@@ -119,7 +119,7 @@ export default async function runKeyboardShortcutTests() {
         const button = video.vsc.div.shadowRoot.querySelector('#periodic-advance-status');
         const slash = getComputedStyle(button, '::after');
         return {
-          hidden: button.hidden,
+          hidden: getComputedStyle(button).display === 'none',
           active: button.getAttribute('aria-pressed') === 'true',
           underlined: getComputedStyle(button).textDecorationLine.includes('underline'),
           slashed: !['none', 'normal'].includes(slash.content) && slash.transform !== 'none',
@@ -128,7 +128,15 @@ export default async function runKeyboardShortcutTests() {
           paused: video.paused,
         };
       });
+    const hoverStatus = async () => {
+      const point = await page.$eval('video', (video) => {
+        const rect = video.vsc.speedIndicator.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      });
+      await page.mouse.move(point.x, point.y);
+    };
     const clickStatus = async () => {
+      await hoverStatus();
       const point = await page.$eval('video', (video) => {
         const rect = video.vsc.div.shadowRoot
           .querySelector('#periodic-advance-status')
@@ -137,8 +145,12 @@ export default async function runKeyboardShortcutTests() {
       });
       await page.mouse.click(point.x, point.y);
     };
-    const captureStatus = async (name) => {
-      await page.mouse.move(700, 400);
+    const captureStatus = async (name, hovered = false) => {
+      if (hovered) {
+        await hoverStatus();
+      } else {
+        await page.mouse.move(700, 400);
+      }
       const clip = await page.$eval('video', (video) => {
         const rect = video.vsc.div.shadowRoot.querySelector('#controller').getBoundingClientRect();
         return {
@@ -152,14 +164,32 @@ export default async function runKeyboardShortcutTests() {
     };
 
     await runTest(
-      'plain A is visible by default, active A has a slash, and clicking cancels even while paused',
+      'A appears on hover in both modes by default, and clicking cancels even while paused',
       async () => {
+        await page.mouse.move(700, 400);
         let state = await statusState();
         assert(
-          !state.hidden && !state.active && !state.slashed && !state.underlined,
-          'plain A is visible while inactive by default'
+          state.hidden && !state.active && !state.slashed && !state.underlined,
+          'inactive A is hidden without hovering by default'
         );
+        await hoverStatus();
+        assert(!(await statusState()).hidden, 'hovering over the speed reveals inactive A');
+        await clickStatus();
+        state = await statusState();
+        assert(
+          !state.hidden && state.active && state.slashed,
+          'clicking A starts periodic advance'
+        );
+        await page.mouse.move(700, 400);
+        state = await statusState();
+        assert(state.hidden && state.active, 'active A also hides when the pointer leaves');
         await page.keyboard.press('Backquote');
+        state = await statusState();
+        assert(state.hidden && !state.active, 'keyboard stop keeps A hidden without hovering');
+        await page.keyboard.press('Backquote');
+        state = await statusState();
+        assert(state.hidden && state.active, 'keyboard start keeps A hidden without hovering');
+        await hoverStatus();
         state = await statusState();
         assert(
           !state.hidden && state.active && state.slashed && !state.underlined && state.adjacent,
@@ -168,7 +198,7 @@ export default async function runKeyboardShortcutTests() {
         await page.$eval('video', (video) => video.pause());
         state = await statusState();
         assert(state.active && !state.hidden, 'pause keeps the mode indicator enabled');
-        await captureStatus('periodic-status-active');
+        await captureStatus('periodic-status-active', true);
         await clickStatus();
         const stopped = await statusState();
         assert(
@@ -179,31 +209,43 @@ export default async function runKeyboardShortcutTests() {
           stopped.speed === state.speed && stopped.paused,
           'status click preserves speed and pause'
         );
+        await page.mouse.move(700, 400);
+        assert((await statusState()).hidden, 'inactive A hides again when the pointer leaves');
         await page.$eval('video', (video) => video.play());
       }
     );
 
     await runTest(
-      'Always Show defaults to on, persists, and A can start and stop periodic advance',
+      'Always Show defaults to off, persists an opt-in, and keeps A visible in both modes',
       async () => {
         await options.bringToFront();
         const selector = '#alwaysShowPeriodicallyAdvanceStatus';
         assert(
-          await options.$eval(selector, (input) => input.checked),
-          'always-show defaults to on'
+          await options.$eval(selector, (input) => !input.checked),
+          'always-show defaults to off'
         );
         await options.click('#save');
         await options.waitForSelector('#save.saved');
         await options.reload();
         await options.waitForSelector('.customs');
         assert(
+          await options.$eval(selector, (input) => !input.checked),
+          'hover-only preference persists after reload'
+        );
+        await options.click(selector);
+        await options.click('#save');
+        await options.waitForSelector('#save.saved');
+        await options.reload();
+        await options.waitForSelector('.customs');
+        assert(
           await options.$eval(selector, (input) => input.checked),
-          'preference persists after reload'
+          'explicit always-show opt-in persists after reload'
         );
         await page.bringToFront();
         await page.waitForFunction(
           () => window.VSC_controller.config.settings.alwaysShowPeriodicallyAdvanceStatus
         );
+        await page.mouse.move(700, 400);
         let state = await statusState();
         assert(
           !state.hidden && !state.active && !state.slashed && !state.underlined,
@@ -211,12 +253,14 @@ export default async function runKeyboardShortcutTests() {
         );
         await captureStatus('periodic-status-inactive');
         await clickStatus();
+        await page.mouse.move(700, 400);
         state = await statusState();
         assert(
           !state.hidden && state.active && state.slashed && !state.underlined,
           'clicking A enables it with a diagonal slash'
         );
         await clickStatus();
+        await page.mouse.move(700, 400);
         state = await statusState();
         assert(
           !state.hidden && !state.active && !state.slashed && !state.underlined,
@@ -237,13 +281,23 @@ export default async function runKeyboardShortcutTests() {
         await page.waitForFunction(
           () => !window.VSC_controller.config.settings.alwaysShowPeriodicallyAdvanceStatus
         );
+        await page.mouse.move(700, 400);
         const active = await statusState();
         assert(
-          active.active && !active.hidden && active.slashed && !active.underlined,
-          'saving a display preference does not stop the mode'
+          active.active && active.hidden,
+          `turning always-show off hides A without stopping the mode: ${JSON.stringify(active)}`
+        );
+        await hoverStatus();
+        const hovered = await statusState();
+        assert(
+          !hovered.hidden && hovered.active && hovered.slashed && !hovered.underlined,
+          'hovering still reveals slashed active A after the live change'
         );
         await clickStatus();
+        await page.mouse.move(700, 400);
         assert((await statusState()).hidden, 'A hides after stopping with preference off');
+        await hoverStatus();
+        assert(!(await statusState()).hidden, 'inactive A is still available on hover');
       }
     );
 

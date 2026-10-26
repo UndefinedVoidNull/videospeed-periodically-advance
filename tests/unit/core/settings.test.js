@@ -43,14 +43,14 @@ describe('Settings', () => {
     expect(settings.lastSpeed).toBeNull(); // no user choice yet
   });
 
-  it('defaults Always Show Periodically Advance Status to on and persists an explicit opt-out', async () => {
+  it('defaults Always Show Periodically Advance Status to off and persists an explicit opt-in', async () => {
     const config = new window.VSC.VideoSpeedConfig();
     await config.load();
-    expect(config.settings.alwaysShowPeriodicallyAdvanceStatus).toBe(true);
-    await config.save({ alwaysShowPeriodicallyAdvanceStatus: false });
+    expect(config.settings.alwaysShowPeriodicallyAdvanceStatus).toBe(false);
+    await config.save({ alwaysShowPeriodicallyAdvanceStatus: true });
     const reloaded = new window.VSC.VideoSpeedConfig();
     await reloaded.load();
-    expect(reloaded.settings.alwaysShowPeriodicallyAdvanceStatus).toBe(false);
+    expect(reloaded.settings.alwaysShowPeriodicallyAdvanceStatus).toBe(true);
   });
 
   it('VideoSpeedConfig should save settings to storage', async () => {

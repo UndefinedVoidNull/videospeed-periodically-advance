@@ -89,7 +89,7 @@ Periodic advance, hold speed up, standalone mouse shortcuts, and fully editable 
 - **普通 A**：当前未开启周期快进，点击开始。
 - **带左上到右下斜线的 A**：周期快进已开启，点击退出。暂停视频时仍保持这个状态，方便恢复播放后继续。
 
-**Preferences → Always Show Periodically Advance Status** 默认开启。关闭该选项后，未开启周期快进时会隐藏 A，开启时仍会显示。按钮跟随控制器整体的显示与隐藏。
+**Preferences → Always Show Periodically Advance Status** 默认关闭。无论是否开启周期快进，A 都在鼠标悬停于倍速控制器时显示；勾选该选项后可常驻显示。按钮跟随控制器整体的显示与隐藏。
 
 通过 A 开始时，优先使用上次的周期参数；没有记录时使用已配置的 Toggle/Hold 参数；没有相关快捷键时，使用默认的“每 0.9 秒跳过 3 秒”。
 
@@ -204,7 +204,7 @@ Hold actions end on release, a tab switch, window blur, or focus entering a text
 - **Plain A:** periodic advance is off. Click to start.
 - **A with a top-left-to-bottom-right diagonal slash:** periodic advance is on. Click to stop. It remains in this state while paused so playback can resume in the same mode.
 
-**Preferences → Always Show Periodically Advance Status** is enabled by default. Turn it off to hide A while inactive; it still appears while active. The button follows the controller's overall visibility.
+**Preferences → Always Show Periodically Advance Status** is off by default. A appears when hovering over the speed controller, whether periodic advance is active or inactive. Turn the option on to keep A visible. The button follows the controller's overall visibility.
 
 Starting from A reuses the last periodic parameters, then a configured Toggle/Hold binding, then the default of skipping 3 seconds every 0.9 seconds if no relevant binding exists.
 

@@ -84,12 +84,14 @@ Keyboard and popup display actions broadcast to every attached controller. Each 
 ## Formal model
 
 The periodic-advance **A** button is a child of the existing controller beside
-the speed badge, outside its hover-only controls. Its local `hidden` state is
-`!periodicActive && !alwaysShowPeriodicallyAdvanceStatus`. Always-show defaults
-to on: an inactive A is plain and starts the periodic mode when clicked; an
-active A has a diagonal slash and stops it when clicked. A never changes the host override,
+the speed badge, outside its controls span. Always-show defaults to off: A is
+shown only while hovering over or dragging the controller, regardless of whether
+periodic advance is active. Enabling `alwaysShowPeriodicallyAdvanceStatus` adds
+`data-always-show` to A and keeps it visible without hovering. An inactive A is
+plain and starts the periodic mode when clicked; an active A has a diagonal
+slash and stops it when clicked. A never changes the host override,
 automatic hide, flash timer, or the render precedence above. Pausing a video
-skips seeks but leaves the enabled-mode indicator visible. No formal visibility
+skips seeks but preserves the enabled-mode indicator and its hover policy. No formal visibility
 transition changes are required; browser tests cover the child's rendering and
 the existing host visibility matrix.
 

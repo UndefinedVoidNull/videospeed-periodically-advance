@@ -39,7 +39,7 @@ if (!window.VSC.Constants.DEFAULT_SETTINGS) {
     exclusiveKeys: false, // default: false
     audioBoolean: true, // default: true (enable audio controller support)
     startHidden: false, // default: false
-    alwaysShowPeriodicallyAdvanceStatus: true,
+    alwaysShowPeriodicallyAdvanceStatus: false,
     controllerOpacity: 0.3, // default: 0.3
     controllerButtonSize: 14,
     customCSS: '', // user's additional CSS injected alongside the built-in defaults

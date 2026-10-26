@@ -61,40 +61,39 @@ describe('Periodic advance status beside the speed badge', () => {
     cleanupChromeMock();
   });
 
-  it('keeps A separate from the speed text and visible by default while off', () => {
+  it('keeps A separate from the speed text and leaves always-show off by default', () => {
     expect(button().textContent).toBe('A');
     expect(button().previousElementSibling).toBe(controller.speedIndicator);
     expect(controller.speedIndicator.textContent).toBe('1.00');
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
     expect(button().getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('shows A for an enabled toggle even while paused, and clicking it cancels without changing speed', () => {
-    config.settings.alwaysShowPeriodicallyAdvanceStatus = false;
-    manager.updatePeriodicAdvanceStatus();
-    expect(button().hidden).toBe(true);
+  it('keeps the hover policy when toggled while paused, and clicking A cancels without changing speed', () => {
+    expect(button().hasAttribute('data-always-show')).toBe(false);
     key('keydown');
     key('keyup');
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
     expect(button().getAttribute('aria-pressed')).toBe('true');
     vi.advanceTimersByTime(1800);
     expect(handler.seek).not.toHaveBeenCalled();
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
     button().click();
     expect(manager.isPeriodicAdvanceActive()).toBe(false);
-    expect(button().hidden).toBe(true);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
+    expect(button().getAttribute('aria-pressed')).toBe('false');
     expect(video.playbackRate).toBe(1);
     expect(video.paused).toBe(true);
   });
 
-  it('shows and clears held status on press, release, blur and a cancel shortcut', () => {
+  it('updates held status without enabling always-show on press, release, blur and cancel', () => {
     config.settings.keyBindings = [
       { action: 'holdAdvance', code: 'KeyH', value: 4, interval: 0.25 },
       { action: 'cancelAdvance', code: 'KeyC', value: 0 },
     ];
     for (const end of ['keyup', 'blur', 'cancel']) {
       key('keydown', 'KeyH');
-      expect(button().hidden).toBe(false);
+      expect(button().hasAttribute('data-always-show')).toBe(false);
       expect(button().getAttribute('aria-pressed')).toBe('true');
       if (end === 'keyup') {
         key('keyup', 'KeyH');
@@ -103,20 +102,22 @@ describe('Periodic advance status beside the speed badge', () => {
       } else {
         key('keydown', 'KeyC');
       }
-      expect(button().hidden).toBe(false);
+      expect(button().hasAttribute('data-always-show')).toBe(false);
       expect(button().getAttribute('aria-pressed')).toBe('false');
     }
   });
 
   it('always-show lets an inactive A start a toggle and an active A stop it', () => {
-    expect(button().hidden).toBe(false);
+    config.settings.alwaysShowPeriodicallyAdvanceStatus = true;
+    manager.updatePeriodicAdvanceStatus();
+    expect(button().hasAttribute('data-always-show')).toBe(true);
     expect(button().getAttribute('aria-pressed')).toBe('false');
     button().click();
     expect(button().getAttribute('aria-pressed')).toBe('true');
     expect(manager.lastPeriodicAdvanceBinding).toEqual({ value: 3, interval: 0.9 });
     button().click();
     expect(manager.periodicAdvance).toBeNull();
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(true);
     expect(button().getAttribute('aria-pressed')).toBe('false');
   });
 
@@ -144,11 +145,11 @@ describe('Periodic advance status beside the speed badge', () => {
     key('keydown');
     const second = attachVideo();
     const otherButton = second.instance.div.shadowRoot.querySelector('#periodic-advance-status');
-    expect(otherButton.hidden).toBe(false);
+    expect(otherButton.hasAttribute('data-always-show')).toBe(false);
     expect(otherButton.getAttribute('aria-pressed')).toBe('true');
     otherButton.click();
-    expect(button().hidden).toBe(false);
-    expect(otherButton.hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
+    expect(otherButton.hasAttribute('data-always-show')).toBe(false);
     expect(button().getAttribute('aria-pressed')).toBe('false');
     expect(otherButton.getAttribute('aria-pressed')).toBe('false');
   });
@@ -167,20 +168,20 @@ describe('Periodic advance status beside the speed badge', () => {
     expect(manager.isPeriodicAdvanceActive()).toBe(true);
     expect(button().getAttribute('aria-pressed')).toBe('true');
     button().click();
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(true);
     expect(button().getAttribute('aria-pressed')).toBe('false');
     simulateExternalStorageWrite({ alwaysShowPeriodicallyAdvanceStatus: false });
-    expect(button().hidden).toBe(true);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
   });
 
   it('clears active status on pagehide and cleanup', () => {
     key('keydown');
     window.dispatchEvent(new Event('pagehide'));
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
     expect(button().getAttribute('aria-pressed')).toBe('false');
     key('keydown');
     manager.cleanup();
-    expect(button().hidden).toBe(false);
+    expect(button().hasAttribute('data-always-show')).toBe(false);
     expect(button().getAttribute('aria-pressed')).toBe('false');
   });
 });
